@@ -1,8 +1,7 @@
 #include <Arduino.h>
-#include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 #include <OneWire.h>
-#include <DS1307RTC.h>
+#include <RTClib.h>
 #include <Time.h>
 #include <DallasTemperature.h>
 #include <Servo.h>
@@ -39,6 +38,7 @@ OneWire ourWire(TEMP_PIN); //Se establece el pin declarado como bus para la comu
 DallasTemperature sensors(&ourWire); //Se instancia la librería DallasTemperature
 LiquidCrystal_I2C lcd(0x27, 20, 4); // set the LCD address to 0x27 for a 16 chars and 2 line display
 Servo myServo;  // create a servo object
+RTC_DS1307 RTC;              // RTC
 
 int TOTAL_FEED; //Acumulador de alimentaciones total
 bool HAN_COMIDO = false;
@@ -63,6 +63,7 @@ int END_BACKLIGHT; //Minutos de fin de luz
 
 void setup()
 {
+  
   lcd.init();                      // initialize the lcd
   // Print a message to the LCD.
   lcd.backlight();
@@ -90,7 +91,7 @@ void setup()
 
   BEGIN_BACKLIGHT = BACKLIGHT_HOUR_ON * 60 + BACKLIGHT_MIN_ON;
   END_BACKLIGHT = BACKLIGHT_HOUR_OFF * 60 + BACKLIGHT_MIN_OFF;
-
+  RTC.begin();
 }
 void loop()
 {
@@ -119,7 +120,9 @@ void loop()
 }
 
 void reconfig() {
-
+  //Strange workarrownd for Clock setting
+  int setDate = false;
+  
   //setDate=20160331190021;
   if (input.startsWith("setDate=") && input.length() == 22) {
     Serial.print("SerialInput:");
@@ -133,12 +136,13 @@ void reconfig() {
     int ss = input.substring(20, 22).toInt();
 
     setTime(HH, mm, ss, dd, MM, yyyy);
-
+    setDate = true;
+    
     Serial.print("NewDate:");
     Serial.print(HH); Serial.print(mm); Serial.print(ss); 
     Serial.print(" ");
     Serial.print(dd); Serial.print("/"); Serial.print(MM); Serial.print( "/" ); Serial.print(yyyy);Serial.print(";");
-    RTC.set(now());
+
   }
 
   //setLight=1800,2330;
@@ -206,6 +210,11 @@ void reconfig() {
     Serial.println("* backlight=Mode; | Modes: 0:Off; 1:On; 2:Auto *");
     delay(2000);
   }
+
+  if (setDate){
+    setDate = false;
+    RTC.adjust(now());   
+  }
 }
 
 
@@ -213,7 +222,7 @@ float printTemp() {
   sensors.requestTemperatures(); //Prepara el sensor para, la lectura
   float temp = 0;
   
-  //temp = sensors.getTempCByIndex(0);
+  temp = sensors.getTempCByIndex(0);
 
   Serial.print("Temp:");
   Serial.print(temp);
@@ -227,33 +236,20 @@ float printTemp() {
 }
 
 void printDate() {
-  tmElements_t tm;
   char buffer[9];
 
-  //if (true){
-  if (RTC.read(tm)) {
-    T = {tm.Hour, tm.Minute, tm.Second};
-    Serial.print("Time:");
-    sprintf(buffer, "%02d:%02d:%02d  %02d/%02d/%04d", tm.Hour, tm.Minute, tm.Second, tm.Day, tm.Month, tmYearToCalendar(tm.Year));
+  DateTime now = RTC.now(); 
+  
+  T = {now.hour(), now.minute(), now.second()};
+  Serial.print("Time:");
+  sprintf(buffer, "%02d:%02d:%02d  %02d/%02d/%04d", now.hour(), now.minute(), now.second(), now.day(), now.month(), now.year());
+  
+  Serial.print(buffer);
+  Serial.println(";");
 
-    Serial.print(buffer);
-    Serial.println(";");
+  lcd.setCursor(0, 3);
+  lcd.print(buffer);
 
-    lcd.setCursor(0, 3);
-    lcd.print(buffer);
-
-  } else {
-    if (RTC.chipPresent()) {
-      //Serial.println("The DS1307 is stopped.  Please run the SetTime");
-      //Serial.println();
-      setTime(0, 0, 0, 1, 1, 1900);
-      RTC.set(now());
-    } else {
-      //Serial.println("DS1307 read error!  Please check the circuitry.");
-      //Serial.println();
-    }
-    delay(9000);
-  }
 }
 
 bool feed(TIME t, int repeats) {
