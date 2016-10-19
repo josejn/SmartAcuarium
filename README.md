@@ -26,7 +26,7 @@ This proyect is running in an Arduino Nano with some peripherals:
 
 ## Authors
 
-* **José Manuel García** - *Initial work* - [PurpleBooth](https://github.com/josejn)
+* **José Manuel García** - *Initial work* - [Jmgarcia](https://github.com/josejn)
 
 
 ## License
